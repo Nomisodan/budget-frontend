@@ -10,3 +10,29 @@ export async function resetBudget() {
   if (!res.ok) throw new Error(json.error ?? 'Reset failed')
   return json
 }
+
+export async function downloadBackup() {
+  const res = await fetch(`${BASE}/api/backup`)
+  if (!res.ok) throw new Error('Backup failed')
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const filename = disposition.match(/filename="(.+)"/)?.[1] ?? `budget-backup-${new Date().toISOString().slice(0, 10)}.json`
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function restoreBackup(backup) {
+  const res = await fetch(`${BASE}/api/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true, backup }),
+  })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.error ?? 'Restore failed')
+  return json
+}
