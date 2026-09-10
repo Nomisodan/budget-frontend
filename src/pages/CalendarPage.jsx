@@ -7,21 +7,6 @@ import { patchTransaction, fetchCategories } from '../api/transactions'
 
 const BANK_LABEL = { bmo: 'BMO', scotiabank: 'Scotia', desjardins: 'Desjardins', capital_one: 'Cap One', loc: 'LOC', cash: 'Cash' }
 
-function SidebarButton({ active, onClick, children }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors ${
-        active
-          ? 'bg-[var(--color-today)]/15 text-[var(--color-today)]'
-          : 'text-[var(--color-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
 export default function CalendarPage() {
   const today = new Date()
 
@@ -148,44 +133,39 @@ export default function CalendarPage() {
   const endBalance = data?.days[data.days.length - 1]?.balance ?? 0
 
   return (
-    <div className="flex min-h-screen bg-[var(--color-bg)]">
+    <div className="min-h-screen bg-[var(--color-bg)] px-3 py-4 max-w-2xl mx-auto md:max-w-4xl md:px-8">
 
-      {/* ── Sidebar ── */}
-      <aside className="w-36 md:w-44 flex-shrink-0 bg-[var(--color-surface)] border-r border-[var(--color-border)] sticky top-0 h-screen overflow-y-auto flex flex-col py-4 px-2 pb-20">
-
-        {/* Groups section */}
-        {groups.length > 0 && (
-          <>
-            <p className="text-[9px] font-semibold text-[var(--color-muted)] uppercase tracking-widest px-2 mb-1.5">
-              Groups
-            </p>
-            {groups.map(g => (
-              <SidebarButton key={g.name} active={activeTab === g.name} onClick={() => setActiveTab(g.name)}>
-                <span className="text-xs font-medium">{g.name}</span>
-              </SidebarButton>
-            ))}
-            <div className="border-t border-[var(--color-border)] my-3 mx-1" />
-          </>
-        )}
-
-        {/* Accounts section */}
-        <p className="text-[9px] font-semibold text-[var(--color-muted)] uppercase tracking-widest px-2 mb-1.5">
-          Accounts
-        </p>
-        {accounts.map(a => (
-          <SidebarButton key={a.id} active={activeTab === a.id} onClick={() => setActiveTab(a.id)}>
-            <div className="text-[9px] text-[var(--color-muted)] leading-none mb-0.5 opacity-80">
-              {BANK_LABEL[a.bank] ?? a.bank}
-            </div>
-            <div className="text-xs font-medium leading-snug">{a.name}</div>
-          </SidebarButton>
+      {/* Account / group tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-3 px-3 no-scrollbar">
+        {groups.map(g => (
+          <button
+            key={g.name}
+            onClick={() => setActiveTab(g.name)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              activeTab === g.name
+                ? 'bg-[var(--color-today)] text-black'
+                : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            {g.name}
+          </button>
         ))}
-      </aside>
+        {accounts.map(a => (
+          <button
+            key={a.id}
+            onClick={() => setActiveTab(a.id)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              activeTab === a.id
+                ? 'bg-[var(--color-today)] text-black'
+                : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            <span className="opacity-70">{BANK_LABEL[a.bank] ?? a.bank}</span> {a.name}
+          </button>
+        ))}
+      </div>
 
-      {/* ── Main content ── */}
-      <div className="flex-1 min-w-0 px-3 py-4 md:px-5">
-
-        {/* Header */}
+      {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-bold text-[var(--color-text)]">Cash Flow</h1>
           <div className="flex items-center gap-2">
@@ -327,7 +307,6 @@ export default function CalendarPage() {
           )}
         </div>
 
-      </div>
     </div>
   )
 }
