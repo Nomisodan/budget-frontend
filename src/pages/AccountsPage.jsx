@@ -351,7 +351,12 @@ function ImportPanel({ account }) {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
           >
-            <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={e => handleFile(e.target.files[0])} />
+            <input
+              ref={inputRef} type="file"
+              accept=".csv,text/csv,text/plain,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/octet-stream"
+              className="hidden"
+              onChange={e => handleFile(e.target.files[0])}
+            />
             {file ? (
               <>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-income)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
