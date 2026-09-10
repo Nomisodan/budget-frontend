@@ -496,6 +496,7 @@ function AccountCard({ account, groupNames, onSaved, onDeleted }) {
   const [showImport, setShowImport] = useState(false)
   const [draft, setDraft] = useState('')
   const [nameDraft, setNameDraft] = useState('')
+  const [bankDraft, setBankDraft] = useState(account.bank)
   const [groupsDraft, setGroupsDraft] = useState(new Set())
   const [newGroupInput, setNewGroupInput] = useState('')
   const [saving, setSaving] = useState(false)
@@ -506,6 +507,7 @@ function AccountCard({ account, groupNames, onSaved, onDeleted }) {
   function startEdit() {
     setDraft(account.balance.toString())
     setNameDraft(account.name)
+    setBankDraft(account.bank)
     setGroupsDraft(new Set(account.group_names ?? []))
     setNewGroupInput('')
     setDateDraft(account.balance_date ?? new Date().toISOString().slice(0, 10))
@@ -544,6 +546,7 @@ function AccountCard({ account, groupNames, onSaved, onDeleted }) {
       const updated = await updateAccount(account.id, {
         balance: val,
         name: nameDraft.trim() || account.name,
+        bank: bankDraft,
         balance_date: dateDraft || null,
         group_names: [...groupsDraft],
       })
@@ -600,6 +603,23 @@ function AccountCard({ account, groupNames, onSaved, onDeleted }) {
               onKeyDown={onKeyDown}
               className="w-full bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-today)]"
             />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--color-muted)] mb-1 block">
+              Bank <span className="text-[var(--color-muted)]">— determines which CSV format is expected on import</span>
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {BANK_OPTIONS.map(o => (
+                <button type="button" key={o.value}
+                  onClick={() => setBankDraft(o.value)}
+                  className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    bankDraft === o.value
+                      ? 'bg-[var(--color-today)]/15 border-[var(--color-today)] text-[var(--color-today)]'
+                      : 'bg-[var(--color-surface-2)] border-[var(--color-border)] text-[var(--color-muted)]'
+                  }`}
+                >{o.label}</button>
+              ))}
+            </div>
           </div>
           <div>
             <label className="text-xs text-[var(--color-muted)] mb-1 block">Groups <span className="normal-case text-[var(--color-muted)]">— an account can belong to more than one</span></label>
