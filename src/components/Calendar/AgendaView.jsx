@@ -1,6 +1,5 @@
-import { useState } from 'react'
-import { patchTransaction } from '../../api/transactions'
-import CategoryInput from './CategoryInput'
+import DayDrawer from './DayDrawer'
+import useDayDrawer from './useDayDrawer'
 
 const SplitIcon = () => (
   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -19,11 +18,6 @@ const TYPE_BG = {
   expense:  'bg-[var(--color-expense)]/10',
   transfer: 'bg-[var(--color-transfer)]/10',
 }
-const TYPE_BORDER = {
-  income:   'border-[var(--color-income)]',
-  expense:  'border-[var(--color-expense)]',
-  transfer: 'border-[var(--color-transfer)]',
-}
 
 function fmtSigned(amount) {
   const abs = Math.abs(amount).toLocaleString('en-CA', { minimumFractionDigits: 2 })
@@ -39,16 +33,14 @@ function balanceColor(amount) {
   return amount >= 0 ? 'text-[var(--color-income)]' : 'text-[var(--color-expense)]'
 }
 
-export default function AgendaView({ data, onTypeChange, categories = [], onCategoryChange, multiAccount = false }) {
-  const [editingId, setEditingId] = useState(null)
-  const [editCatVal, setEditCatVal] = useState('')
+export default function AgendaView({ data, accountId, accounts = [], onTypeChange, onTransactionAdded, categories = [], onCategoryChange, multiAccount = false }) {
+  const {
+    selectedDay, openDay, closeDay, openSeq, initialEditId,
+    handleTypeChange, handleCategoryChange, handleTransactionAdded, handleTransactionEdited, handleTransactionDeleted,
+  } = useDayDrawer(onTypeChange, onCategoryChange, onTransactionAdded)
+
   if (!data) return null
   const { days } = data
-
-  function handleTypeSelect(txnId, newType) {
-    setEditingId(null)
-    onTypeChange?.(txnId, newType)
-  }
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -131,20 +123,14 @@ export default function AgendaView({ data, onTypeChange, categories = [], onCate
               )}
 
               {day.transactions.map((t, i) => {
-                const isEditing = editingId === t.id
                 const isGhost = t.is_projection
                 return (
-                  <div key={i} className={`flex flex-col gap-1 ${isGhost ? 'opacity-55' : ''}`}>
+                  <div key={i} className={isGhost ? 'opacity-55' : ''}>
                     <div
                       className={`flex items-center justify-between rounded-lg px-3 py-2 ${TYPE_BG[t.type] ?? 'bg-[var(--color-surface-2)]'} ${!t.is_scheduled && !isGhost ? 'cursor-pointer' : ''}`}
                       onClick={() => {
                         if (t.is_scheduled || isGhost) return
-                        if (isEditing) {
-                          setEditingId(null)
-                        } else {
-                          setEditingId(t.id)
-                          setEditCatVal(t.category || '')
-                        }
+                        openDay(day, t.id)
                       }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
@@ -200,40 +186,6 @@ export default function AgendaView({ data, onTypeChange, categories = [], onCate
                         {fmtSigned(t.amount)}
                       </span>
                     </div>
-                    {isEditing && (
-                      <div className="flex flex-col gap-1.5 px-1">
-                        <div className="flex gap-1.5">
-                          {['income', 'expense', 'transfer'].map(type => (
-                            <button
-                              key={type}
-                              onClick={() => handleTypeSelect(t.id, type)}
-                              className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors capitalize ${
-                                t.type === type
-                                  ? `${TYPE_BG[type]} ${TYPE_BORDER[type]} ${TYPE_COLOR[type]}`
-                                  : 'bg-[var(--color-surface-2)] border-[var(--color-border)] text-[var(--color-muted)]'
-                              }`}
-                            >
-                              {type}
-                            </button>
-                          ))}
-                        </div>
-                        <CategoryInput
-                          value={editCatVal}
-                          onChange={setEditCatVal}
-                          onSave={async (val) => {
-                            const trimmed = (val || '').trim()
-                            if (trimmed === (t.category || '')) return
-                            try {
-                              await patchTransaction(t.id, { category: trimmed || null })
-                              onCategoryChange?.(t.id, trimmed || null)
-                            } catch { /* ignore */ }
-                          }}
-                          categories={categories}
-                          placeholder="Category (optional)"
-                          className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-today)]"
-                        />
-                      </div>
-                    )}
                   </div>
                 )
               })}
@@ -253,6 +205,14 @@ export default function AgendaView({ data, onTypeChange, categories = [], onCate
           </div>
         )
       })}
+
+      <DayDrawer
+        day={selectedDay} accountId={accountId} accounts={accounts} onClose={closeDay}
+        onTypeChange={handleTypeChange} onTransactionAdded={handleTransactionAdded}
+        onTransactionEdited={handleTransactionEdited} onTransactionDeleted={handleTransactionDeleted}
+        categories={categories} onCategoryChange={handleCategoryChange} multiAccount={multiAccount}
+        initialEditId={initialEditId} openSeq={openSeq}
+      />
     </div>
   )
 }

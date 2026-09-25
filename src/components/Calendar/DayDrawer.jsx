@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createTransaction, patchTransaction, deleteTransaction, fetchCategorySuggestion, splitTransaction, unsplitTransaction } from '../../api/transactions'
 import CategoryInput from './CategoryInput'
@@ -34,7 +34,7 @@ const TYPE_BG_MAP = {
   transfer: 'bg-[var(--color-transfer)]/10',
 }
 
-export default function DayDrawer({ day, accountId, accounts = [], onClose, onTypeChange, onTransactionAdded, onTransactionEdited, onTransactionDeleted, categories = [], onCategoryChange, multiAccount = false }) {
+export default function DayDrawer({ day, accountId, accounts = [], onClose, onTypeChange, onTransactionAdded, onTransactionEdited, onTransactionDeleted, categories = [], onCategoryChange, multiAccount = false, initialEditId = null, openSeq = 0 }) {
   const navigate = useNavigate()
   const [editingId, setEditingId] = useState(null)
   const [editCatVal, setEditCatVal] = useState('')
@@ -51,7 +51,6 @@ export default function DayDrawer({ day, accountId, accounts = [], onClose, onTy
   const [saving, setSaving] = useState(false)
   const [addError, setAddError] = useState(null)
   const [suggestedCategory, setSuggestedCategory] = useState(null)
-  if (!day) return null
 
   const otherAccounts = accounts.filter(a => a.id !== accountId)
 
@@ -59,6 +58,34 @@ export default function DayDrawer({ day, accountId, accounts = [], onClose, onTy
     const bank = accounts.find(a => a.id === t.account_id)?.bank
     return bank === 'cash' || bank === 'loan'
   }
+
+  function openEditFor(t) {
+    setEditingId(t.id)
+    setEditCatVal(t.category || '')
+    setSplittingId(null)
+    if (isManualTxn(t) || t.source === 'manual') {
+      setEditForm({
+        description: t.description,
+        amount: Math.abs(t.amount).toFixed(2),
+        type: t.type,
+        category: t.category || '',
+        is_projection: !!t.is_projection,
+      })
+    }
+  }
+
+  // Opened from a row click in the agenda (list) view — jump straight into editing
+  // that transaction instead of requiring a second click inside the drawer.
+  useEffect(() => {
+    if (!day || initialEditId == null) return
+    const t = day.transactions.find(tx => tx.id === initialEditId)
+    const isGhost = t?.is_projection && typeof t.id === 'string'
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (t && !t.is_scheduled && !isGhost) openEditFor(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSeq])
+
+  if (!day) return null
 
   async function submitFullEdit(t) {
     const rawAmt = parseFloat(editForm.amount)
@@ -283,18 +310,7 @@ export default function DayDrawer({ day, accountId, accounts = [], onClose, onTy
                         setLinkingId(null)
                         setEditForm(null)
                       } else {
-                        setEditingId(t.id)
-                        setEditCatVal(t.category || '')
-                        setSplittingId(null)
-                        if (isManualTxn(t) || t.source === 'manual') {
-                          setEditForm({
-                            description: t.description,
-                            amount: Math.abs(t.amount).toFixed(2),
-                            type: t.type,
-                            category: t.category || '',
-                            is_projection: !!t.is_projection,
-                          })
-                        }
+                        openEditFor(t)
                       }
                     }}
                   >
@@ -637,7 +653,7 @@ export default function DayDrawer({ day, accountId, accounts = [], onClose, onTy
                             onCategoryChange?.(t.id, trimmed || null)
                           } catch { /* ignore */ }
                         }}
-                        onCommit={() => { setEditingId(null); setLinkingId(null); onClose() }}
+                        onCommit={() => { setEditingId(null); setLinkingId(null) }}
                         categories={categories}
                         placeholder="Category (optional)"
                         className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-today)]"

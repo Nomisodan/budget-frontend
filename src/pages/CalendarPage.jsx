@@ -268,7 +268,10 @@ export default function CalendarPage() {
         {!loading && !error && view === 'agenda' && (
           <AgendaView
             data={data}
+            accountId={activeAccountId}
+            accounts={accounts}
             onTypeChange={handleTypeChange}
+            onTransactionAdded={() => setRefreshKey(k => k + 1)}
             categories={categories}
             onCategoryChange={handleCategoryChange}
             multiAccount={isGroupTab}

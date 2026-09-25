@@ -1,58 +1,14 @@
-import { useState } from 'react'
 import DayCell from './DayCell'
 import DayDrawer from './DayDrawer'
+import useDayDrawer from './useDayDrawer'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function CalendarGrid({ data, accountId, accounts, onTypeChange, onTransactionAdded, categories = [], onCategoryChange, multiAccount = false }) {
-  const [selectedDay, setSelectedDay] = useState(null)
-
-  function handleTypeChange(txnId, newType, linkedAccountId = null) {
-    setSelectedDay(prev => prev ? {
-      ...prev,
-      transactions: prev.transactions.map(t =>
-        t.id === txnId ? { ...t, type: newType, linked_account_id: linkedAccountId } : t
-      ),
-    } : prev)
-    onTypeChange?.(txnId, newType, linkedAccountId)
-  }
-
-  function handleCategoryChange(txnId, newCategory) {
-    setSelectedDay(prev => prev ? {
-      ...prev,
-      transactions: prev.transactions.map(t =>
-        t.id === txnId ? { ...t, category: newCategory } : t
-      ),
-    } : prev)
-    onCategoryChange?.(txnId, newCategory)
-  }
-
-  function handleTransactionAdded(newTxn) {
-    if (newTxn) {
-      setSelectedDay(prev => prev ? {
-        ...prev,
-        transactions: [...prev.transactions, newTxn],
-      } : prev)
-    }
-    onTransactionAdded?.()
-  }
-
-  function handleTransactionEdited(txnId, updated) {
-    setSelectedDay(prev => prev ? {
-      ...prev,
-      transactions: prev.transactions.map(t => t.id === txnId ? { ...t, ...updated } : t),
-    } : prev)
-    onTransactionAdded?.()
-  }
-
-  function handleTransactionDeleted(txnId) {
-    setSelectedDay(prev => {
-      if (!prev) return prev
-      const remaining = prev.transactions.filter(t => t.id !== txnId)
-      return remaining.length === 0 ? null : { ...prev, transactions: remaining }
-    })
-    onTransactionAdded?.()
-  }
+  const {
+    selectedDay, openDay, closeDay, openSeq, initialEditId,
+    handleTypeChange, handleCategoryChange, handleTransactionAdded, handleTransactionEdited, handleTransactionDeleted,
+  } = useDayDrawer(onTypeChange, onCategoryChange, onTransactionAdded)
 
   if (!data) return null
 
@@ -90,13 +46,19 @@ export default function CalendarGrid({ data, accountId, accounts, onTypeChange, 
             <DayCell
               key={day.date}
               day={day}
-              onClick={setSelectedDay}
+              onClick={d => openDay(d)}
             />
           ))}
         </div>
       </div>
 
-      <DayDrawer day={selectedDay} accountId={accountId} accounts={accounts} onClose={() => setSelectedDay(null)} onTypeChange={handleTypeChange} onTransactionAdded={handleTransactionAdded} onTransactionEdited={handleTransactionEdited} onTransactionDeleted={handleTransactionDeleted} categories={categories} onCategoryChange={handleCategoryChange} multiAccount={multiAccount} />
+      <DayDrawer
+        day={selectedDay} accountId={accountId} accounts={accounts} onClose={closeDay}
+        onTypeChange={handleTypeChange} onTransactionAdded={handleTransactionAdded}
+        onTransactionEdited={handleTransactionEdited} onTransactionDeleted={handleTransactionDeleted}
+        categories={categories} onCategoryChange={handleCategoryChange} multiAccount={multiAccount}
+        initialEditId={initialEditId} openSeq={openSeq}
+      />
     </>
   )
 }
