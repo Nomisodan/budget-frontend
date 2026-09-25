@@ -29,9 +29,9 @@ const BANK_COLOR = {
   bmo:         'text-[var(--color-transfer)] bg-[var(--color-transfer)]/10',
   scotiabank:  'text-[var(--color-income)]   bg-[var(--color-income)]/10',
   desjardins:  'text-[var(--color-income)]   bg-[var(--color-income)]/10',
-  capital_one: 'text-[var(--color-expense)]  bg-[var(--color-expense)]/10',
-  loc:         'text-[var(--color-expense)]  bg-[var(--color-expense)]/10',
-  loan:        'text-[var(--color-expense)]  bg-[var(--color-expense)]/10',
+  capital_one: 'text-[var(--color-violet)]   bg-[var(--color-violet)]/10',
+  loc:         'text-[var(--color-violet)]   bg-[var(--color-violet)]/10',
+  loan:        'text-[var(--color-violet)]   bg-[var(--color-violet)]/10',
   other:       'text-[var(--color-muted)]    bg-[var(--color-surface-2)]',
   cash:        'text-[var(--color-today)]    bg-[var(--color-today)]/10',
 }
