@@ -1,14 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchCategorySummary } from '../api/categories'
-import { fetchAccounts } from '../api/accounts'
 import { fetchUpcomingScheduled } from '../api/scheduled'
-
-const COLORS = [
-  '#f97316','#3b82f6','#a855f7','#22c55e','#eab308',
-  '#06b6d4','#ec4899','#14b8a6','#f43f5e','#8b5cf6',
-  '#84cc16','#fb923c','#60a5fa','#c084fc','#34d399',
-]
+import { fetchCategories } from '../api/transactions'
+import { GROUPS, fetchCategoryGroups, setCategoryGroup } from '../api/categoryGroups'
+import useMonthSummary from '../hooks/useMonthSummary'
+import MonthFilterBar from '../components/MonthFilterBar'
 
 function fmt(n) {
   return Math.abs(n).toLocaleString('en-CA', { maximumFractionDigits: 0 })
@@ -16,53 +12,6 @@ function fmt(n) {
 
 function fmtDec(n) {
   return Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-// ─── SVG Donut Chart ─────────────────────────────────────────────────────────
-
-function polar(cx, cy, r, deg) {
-  const rad = (deg - 90) * Math.PI / 180
-  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)]
-}
-
-function slicePath(cx, cy, outer, inner, start, end) {
-  const [ox1, oy1] = polar(cx, cy, outer, start)
-  const [ox2, oy2] = polar(cx, cy, outer, end)
-  const [ix1, iy1] = polar(cx, cy, inner, end)
-  const [ix2, iy2] = polar(cx, cy, inner, start)
-  const large = end - start > 180 ? 1 : 0
-  return `M${ox1},${oy1} A${outer},${outer},0,${large},1,${ox2},${oy2} L${ix1},${iy1} A${inner},${inner},0,${large},0,${ix2},${iy2}Z`
-}
-
-function DonutChart({ slices, total }) {
-  const size = 220
-  const cx = size / 2, cy = size / 2
-  const outer = 90, inner = 58
-  const gap = slices.length > 1 ? 1.5 : 0
-
-  let angle = 0
-  const paths = slices.map((s, i) => {
-    const sweep = s.pct * 360
-    const start = angle + gap / 2
-    const end   = angle + sweep - gap / 2
-    angle += sweep
-    return { d: slicePath(cx, cy, outer, inner, start, end), color: COLORS[i % COLORS.length] }
-  })
-
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="mx-auto">
-      {paths.map((p, i) => (
-        <path key={i} d={p.d} fill={p.color} />
-      ))}
-      {/* Center label */}
-      <text x={cx} y={cy - 8} textAnchor="middle" className="fill-[var(--color-muted)]" fontSize="11" fontFamily="inherit">
-        Expenses
-      </text>
-      <text x={cx} y={cy + 12} textAnchor="middle" className="fill-[var(--color-text)]" fontSize="16" fontWeight="700" fontFamily="monospace">
-        ${fmt(total)}
-      </text>
-    </svg>
-  )
 }
 
 // ─── What's next widget ─────────────────────────────────────────────────────────
@@ -106,71 +55,123 @@ function WhatsNextCard() {
   )
 }
 
+// ─── Group setup (assign each sub-category to a group) ───────────────────────
+
+function GroupSetup({ categories, mapping, onChange, onClose }) {
+  const [saving, setSaving] = useState(null)
+  const [error, setError] = useState(null)
+
+  async function assign(category, group) {
+    const next = mapping[category] === group ? null : group  // tap the selected group again to unassign
+    setSaving(category)
+    setError(null)
+    try {
+      await setCategoryGroup(category, next)
+      onChange(category, next)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const unassigned = categories.filter(c => !mapping[c])
+  const assigned   = categories.filter(c => mapping[c])
+
+  const row = c => (
+    <div key={c} className="px-4 py-2.5 border-t border-[var(--color-border)]/40">
+      <p className={`text-sm mb-1.5 ${saving === c ? 'text-[var(--color-muted)]' : 'text-[var(--color-text)]'}`}>{c}</p>
+      <div className="flex gap-1.5 flex-wrap">
+        {GROUPS.map(g => {
+          const on = mapping[c] === g.key
+          return (
+            <button key={g.key} disabled={saving === c} onClick={() => assign(c, g.key)}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                on ? 'text-black border-transparent' : 'text-[var(--color-muted)] border-[var(--color-border)] bg-[var(--color-bg)]'
+              }`}
+              style={on ? { backgroundColor: g.color } : undefined}
+            >{g.label}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="bg-[var(--color-surface)] rounded-2xl overflow-hidden mb-4">
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-widest">Set up groups</p>
+        <button onClick={onClose} className="text-xs font-medium text-[var(--color-today)]">Done</button>
+      </div>
+      <p className="px-4 pb-3 text-[11px] text-[var(--color-muted)]">
+        Pick which group each sub-category belongs to. Tap the selected group again to unassign.
+      </p>
+      {error && <p className="px-4 pb-2 text-xs text-[var(--color-expense)]">{error}</p>}
+      {unassigned.length > 0 && (
+        <>
+          <p className="px-4 pt-2 pb-1 text-[10px] font-semibold text-[var(--color-today)] uppercase tracking-widest">
+            Unassigned ({unassigned.length})
+          </p>
+          {unassigned.map(row)}
+        </>
+      )}
+      {assigned.length > 0 && (
+        <>
+          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-widest">Assigned</p>
+          {assigned.map(row)}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── HomePage ─────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const today   = new Date()
-  const saved   = (() => { try { return JSON.parse(localStorage.getItem('calendar-state') || '{}') } catch { return {} } })()
+  const s = useMonthSummary()
+  const { data, loading, error } = s
 
-  const [year,  setYear]  = useState(saved.year  ?? today.getFullYear())
-  const [month, setMonth] = useState(saved.month ?? today.getMonth() + 1)
-  const [data,  setData]  = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(null)
-  const [accounts, setAccounts]   = useState([])
-  const [activeFilter, setActiveFilter] = useState(saved.activeTab ?? 'all')
+  const [mapping, setMapping] = useState({})
+  const [allCategories, setAllCategories] = useState([])
+  const [selected, setSelected] = useState(null)
+  const [setupOpen, setSetupOpen] = useState(false)
 
-  // Derive groups — an account may belong to more than one group
-  const groupMap = {}
-  for (const a of accounts) {
-    for (const gn of a.group_names ?? []) {
-      if (!groupMap[gn]) groupMap[gn] = []
-      groupMap[gn].push(a)
-    }
-  }
-  const groups = Object.entries(groupMap).map(([name, accts]) => ({ name, ids: accts.map(a => a.id) }))
-
-  const filterAccountIds = (() => {
-    if (!activeFilter || activeFilter === 'all') return null
-    if (typeof activeFilter === 'string') return groups.find(g => g.name === activeFilter)?.ids ?? null
-    return [activeFilter]
-  })()
-
-  // Persist to localStorage so Calendar + Categories stay in sync
   useEffect(() => {
-    localStorage.setItem('calendar-state', JSON.stringify({ year, month, activeTab: activeFilter }))
-  }, [year, month, activeFilter])
+    fetchCategoryGroups().then(setMapping).catch(() => {})
+    fetchCategories().then(setAllCategories).catch(() => {})
+  }, [])
 
-  const load = useCallback(() => {
-    setLoading(true)
-    setError(null)
-    fetchCategorySummary(year, month, filterAccountIds)
-      .then(setData)
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, month, activeFilter, accounts])
-
-  useEffect(() => { load() }, [load])
-  useEffect(() => { fetchAccounts().then(setAccounts).catch(() => {}) }, [])
-
-  function prevMonth() {
-    if (month === 1) { setYear(y => y - 1); setMonth(12) } else setMonth(m => m - 1)
+  // Per sub-category expense + income totals for the month
+  const perCat = {}
+  for (const c of data?.categories ?? []) {
+    perCat[c.category] = { ...(perCat[c.category] ?? { exp: 0, inc: 0 }), exp: c.total }
   }
-  function nextMonth() {
-    if (month === 12) { setYear(y => y + 1); setMonth(1) } else setMonth(m => m + 1)
+  for (const c of data?.income_categories ?? []) {
+    perCat[c.category] = { ...(perCat[c.category] ?? { exp: 0, inc: 0 }), inc: c.total }
   }
 
-  const monthLabel = new Date(year, month - 1, 1).toLocaleString('en-CA', { month: 'long', year: 'numeric' })
-  const cats     = data?.categories ?? []
-  const incCats  = data?.income_categories ?? []
-  const expTotal = data?.expense_total ?? 0
-  const incTotal = data?.income_total  ?? 0
-  const net      = incTotal - expTotal
+  // Roll sub-categories up into the four groups. For Income the amount is money in
+  // (net of any expenses tagged there); for the others it's money out (net of refunds).
+  const groupData = Object.fromEntries(GROUPS.map(g => [g.key, { total: 0, subs: [] }]))
+  const unassigned = []
+  for (const [cat, { exp, inc }] of Object.entries(perCat)) {
+    const g = mapping[cat]
+    if (!g || !groupData[g]) { unassigned.push({ category: cat, amount: inc - exp }); continue }
+    const amount = g === 'income' ? inc - exp : exp - inc
+    groupData[g].total += amount
+    groupData[g].subs.push({ category: cat, amount })
+  }
+  for (const g of Object.values(groupData)) g.subs.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+  unassigned.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
 
-  const slices = cats
-    .filter(c => c.total > 0)
-    .map(c => ({ label: c.category, total: c.total, pct: expTotal > 0 ? c.total / expTotal : 0 }))
+  const outflow  = groupData.bills.total + groupData.variables.total + groupData.spending.total
+  const leftOver = groupData.income.total - outflow
+
+  // Every known sub-category, plus any that only appear in this month's data or the mapping
+  const setupCategories = [...new Set([...allCategories, ...Object.keys(perCat), ...Object.keys(mapping)])]
+    .sort((a, b) => a.localeCompare(b))
+
+  const selectedGroup = GROUPS.find(g => g.key === selected)
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] pb-24">
@@ -189,116 +190,110 @@ export default function HomePage() {
 
         <WhatsNextCard />
 
-        {/* ── Account / group filter ── */}
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-4 -mx-4 px-4 no-scrollbar">
-          {[
-            { key: 'all', label: 'All' },
-            ...groups.map(g => ({ key: g.name, label: g.name })),
-            ...accounts.map(a => ({ key: a.id, label: a.name })),
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setActiveFilter(key)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                activeFilter === key
-                  ? 'bg-[var(--color-today)] text-black'
-                  : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)]'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <MonthFilterBar s={s} />
 
-        {/* ── Month nav ── */}
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={prevMonth}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-2)] text-[var(--color-text)] transition-colors">
-            ‹
-          </button>
-          <span className="text-base font-semibold text-[var(--color-text)]">{monthLabel}</span>
-          <button onClick={nextMonth}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-2)] text-[var(--color-text)] transition-colors">
-            ›
-          </button>
-        </div>
+        {setupOpen && (
+          <GroupSetup
+            categories={setupCategories}
+            mapping={mapping}
+            onChange={(cat, g) => setMapping(m => {
+              const next = { ...m }
+              if (g) next[cat] = g; else delete next[cat]
+              return next
+            })}
+            onClose={() => setSetupOpen(false)}
+          />
+        )}
 
         {loading && <div className="flex items-center justify-center py-20 text-[var(--color-muted)]">Loading…</div>}
         {error   && <div className="text-center py-10 text-[var(--color-expense)] text-sm">{error}</div>}
 
         {!loading && !error && data && (
           <>
-            {/* ── Summary cards ── */}
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              <div className="bg-[var(--color-surface)] rounded-xl p-3 text-center">
-                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Income</p>
-                <p className="text-sm font-mono font-bold text-[var(--color-income)]">+${fmt(incTotal)}</p>
-              </div>
-              <div className="bg-[var(--color-surface)] rounded-xl p-3 text-center">
-                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Expenses</p>
-                <p className="text-sm font-mono font-bold text-[var(--color-expense)]">-${fmt(expTotal)}</p>
-              </div>
-              <div className="bg-[var(--color-surface)] rounded-xl p-3 text-center">
-                <p className="text-[10px] text-[var(--color-muted)] mb-0.5">Net</p>
-                <p className={`text-sm font-mono font-bold ${net >= 0 ? 'text-[var(--color-income)]' : 'text-[var(--color-expense)]'}`}>
-                  {net >= 0 ? '+' : '-'}${fmt(net)}
-                </p>
-              </div>
+            {/* ── Four groups ── */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {GROUPS.map(g => {
+                const gd = groupData[g.key]
+                const active = selected === g.key
+                return (
+                  <button key={g.key}
+                    onClick={() => setSelected(active ? null : g.key)}
+                    className={`text-left bg-[var(--color-surface)] rounded-xl p-3 border transition-colors ${
+                      active ? 'border-[var(--color-today)]' : 'border-transparent hover:bg-[var(--color-surface-2)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: g.color }} />
+                      <p className="text-[11px] text-[var(--color-muted)] font-medium">{g.label}</p>
+                    </div>
+                    <p className="text-base font-mono font-bold" style={{ color: g.color }}>
+                      {g.key === 'income' ? '+' : '−'}${fmt(gd.total)}
+                    </p>
+                    <p className="text-[10px] text-[var(--color-muted)] mt-0.5">
+                      {gd.subs.length} sub-categor{gd.subs.length === 1 ? 'y' : 'ies'}
+                    </p>
+                  </button>
+                )
+              })}
             </div>
 
-            {/* ── Donut chart ── */}
-            {slices.length > 0 ? (
-              <>
-                <div className="bg-[var(--color-surface)] rounded-2xl p-4 mb-4">
-                  <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-widest mb-3">
-                    Spending breakdown
-                  </p>
-                  <DonutChart slices={slices} total={expTotal} />
-                </div>
+            {/* ── Left over ── */}
+            <div className="bg-[var(--color-surface)] rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-[var(--color-muted)]">Left over</p>
+              <p className={`text-sm font-mono font-bold ${leftOver >= 0 ? 'text-[var(--color-income)]' : 'text-[var(--color-expense)]'}`}>
+                {leftOver >= 0 ? '+' : '−'}${fmt(leftOver)}
+              </p>
+            </div>
 
-                {/* ── Category legend ── */}
-                <div className="bg-[var(--color-surface)] rounded-2xl overflow-hidden mb-4">
-                  <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-widest px-4 pt-4 pb-2">
-                    Expenses
+            {/* ── Selected group detail ── */}
+            {selectedGroup && (
+              <div className="bg-[var(--color-surface)] rounded-2xl overflow-hidden mb-4">
+                <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-widest px-4 pt-4 pb-2">
+                  {selectedGroup.label}
+                </p>
+                {groupData[selected].subs.length === 0 ? (
+                  <p className="px-4 pb-4 text-xs text-[var(--color-muted)]">
+                    Nothing this month. Assign sub-categories with "Set up groups".
                   </p>
-                  {slices.map((s, i) => (
-                    <div key={s.label} className="flex items-center gap-3 px-4 py-2.5 border-t border-[var(--color-border)]/40">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                      <span className="text-sm text-[var(--color-text)] flex-1 truncate">{s.label}</span>
+                ) : groupData[selected].subs.map(sub => {
+                  const total = groupData[selected].total
+                  return (
+                    <div key={sub.category} className="flex items-center gap-3 px-4 py-2.5 border-t border-[var(--color-border)]/40">
+                      <span className="text-sm text-[var(--color-text)] flex-1 truncate">{sub.category}</span>
                       <span className="text-[11px] text-[var(--color-muted)] flex-shrink-0 w-9 text-right">
-                        {(s.pct * 100).toFixed(0)}%
+                        {total !== 0 ? (sub.amount / total * 100).toFixed(0) : 0}%
                       </span>
-                      <span className="text-sm font-mono text-[var(--color-expense)] flex-shrink-0 w-20 text-right">
-                        ${fmtDec(s.total)}
+                      <span className="text-sm font-mono flex-shrink-0 w-24 text-right" style={{ color: selectedGroup.color }}>
+                        ${fmtDec(sub.amount)}
                       </span>
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="text-center text-[var(--color-muted)] text-sm py-12">No expenses this month</p>
+                  )
+                })}
+              </div>
             )}
 
-            {/* ── Income breakdown ── */}
-            {incCats.length > 0 && (
-              <div className="bg-[var(--color-surface)] rounded-2xl overflow-hidden">
-                <p className="text-[10px] font-semibold text-[var(--color-muted)] uppercase tracking-widest px-4 pt-4 pb-2">
-                  Income
+            {/* ── Not yet grouped (this month) ── */}
+            {unassigned.length > 0 && (
+              <div className="bg-[var(--color-surface)] rounded-2xl overflow-hidden mb-4">
+                <p className="text-[10px] font-semibold text-[var(--color-today)] uppercase tracking-widest px-4 pt-4 pb-2">
+                  Not in a group yet ({unassigned.length})
                 </p>
-                {incCats.map((c, i) => (
-                  <div key={c.category} className="flex items-center gap-3 px-4 py-2.5 border-t border-[var(--color-border)]/40">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-[var(--color-income)]"
-                      style={{ opacity: 1 - i * 0.15 }} />
-                    <span className="text-sm text-[var(--color-text)] flex-1 truncate">{c.category}</span>
-                    <span className="text-[11px] text-[var(--color-muted)] flex-shrink-0 w-9 text-right">
-                      {incTotal > 0 ? (c.total / incTotal * 100).toFixed(0) : 0}%
-                    </span>
-                    <span className="text-sm font-mono text-[var(--color-income)] flex-shrink-0 w-20 text-right">
-                      +${fmtDec(c.total)}
+                {unassigned.map(u => (
+                  <div key={u.category} className="flex items-center gap-3 px-4 py-2.5 border-t border-[var(--color-border)]/40">
+                    <span className="text-sm text-[var(--color-text)] flex-1 truncate">{u.category}</span>
+                    <span className={`text-sm font-mono flex-shrink-0 w-24 text-right ${u.amount >= 0 ? 'text-[var(--color-income)]' : 'text-[var(--color-expense)]'}`}>
+                      {u.amount >= 0 ? '+' : '−'}${fmtDec(u.amount)}
                     </span>
                   </div>
                 ))}
               </div>
+            )}
+
+            {!setupOpen && (
+              <button onClick={() => { setSetupOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                className="w-full py-2.5 rounded-xl border border-dashed border-[var(--color-border)] text-xs font-medium text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
+                Set up groups
+              </button>
             )}
           </>
         )}

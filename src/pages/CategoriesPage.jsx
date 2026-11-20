@@ -96,7 +96,7 @@ export default function CategoriesPage() {
     <div className="min-h-screen bg-[var(--color-bg)] px-3 py-4 max-w-2xl mx-auto md:max-w-4xl md:px-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-bold text-[var(--color-text)]">Categories</h1>
+        <h1 className="text-lg font-bold text-[var(--color-text)]">Sub-categories</h1>
         <div className="flex items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
           <button
             onClick={() => setView('month')}
